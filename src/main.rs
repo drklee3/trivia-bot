@@ -1,59 +1,21 @@
-use std::{
-    collections::HashSet,
-    env,
-    sync::Arc,
-};
-use serenity::{
-    async_trait,
-    client::bridge::gateway::ShardManager,
-    framework::StandardFramework,
-    http::Http,
-    model::{event::ResumedEvent, gateway::Ready},
-    prelude::*,
-};
+use serenity::{framework::StandardFramework, http::Http, prelude::*};
+use std::{collections::HashSet, env};
+use tokio::signal::unix::{signal, SignalKind};
 
 mod commands;
+mod handler;
+mod keys;
+mod model;
+
 use commands::*;
-
-struct ShardManagerContainer;
-
-impl TypeMapKey for ShardManagerContainer {
-    type Value = Arc<Mutex<ShardManager>>;
-}
-
-struct SledContainer;
-
-impl TypeMapKey for SledContainer {
-    type Value = sled::Db;
-}
-
-struct ReqwestContainer;
-
-impl TypeMapKey for ReqwestContainer {
-    type Value = reqwest::Client;
-}
-
-struct Handler;
-
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
-        tracing::info!("Connected as {}", ready.user.name);
-    }
-
-    async fn resume(&self, _: Context, _: ResumedEvent) {
-        tracing::info!("Resumed");
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt().init();
 
-    let token = env::var("DISCORD_TOKEN")
-        .expect("Expected DISCORD_TOKEN in the environment");
-    
+    let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
+
     let sled_path = env::var("SLED_PATH").expect("Expected SLED_PATH in environment");
     let sled = sled::open(sled_path)?;
 
@@ -66,28 +28,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             owners.insert(info.owner.id);
 
             (owners, info.id)
-        },
+        }
         Err(why) => panic!("Could not access application info: {:?}", why),
     };
 
     // Create the framework
     let framework = StandardFramework::new()
-        .configure(|c| c
-                   .owners(owners)
-                   .prefix("$"))
+        .configure(|c| c.owners(owners).prefix("$"))
         .group(&QUIZ_GROUP);
 
     let mut client = Client::new(&token)
         .framework(framework)
-        .event_handler(Handler)
+        .event_handler(handler::Handler)
         .await
         .expect("Err creating client");
 
     {
         let mut data = client.data.write().await;
-        data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<SledContainer>(sled.clone());
-        data.insert::<ReqwestContainer>(reqwest::Client::new());
+        data.insert::<keys::ShardManagerContainer>(client.shard_manager.clone());
+        data.insert::<keys::SledContainer>(sled.clone());
+        data.insert::<keys::ReqwestContainer>(reqwest::Client::new());
+        data.insert::<model::GameState>(model::GameState::new());
+    }
+
+    let signal_kinds = vec![
+        SignalKind::hangup(),
+        SignalKind::interrupt(),
+        SignalKind::terminate(),
+    ];
+
+    for signal_kind in signal_kinds {
+        let mut stream = signal(signal_kind).unwrap();
+        let shard_manager = client.shard_manager.clone();
+
+        tokio::spawn(async move {
+            stream.recv().await;
+            tracing::info!("Signal received, shutting down...");
+            shard_manager.lock().await.shutdown_all().await;
+
+            tracing::info!("bye");
+        });
     }
 
     if let Err(why) = client.start().await {
