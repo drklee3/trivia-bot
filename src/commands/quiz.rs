@@ -73,7 +73,7 @@ pub async fn _quiz(ctx: &Context, msg: &Message, clue: &Clue) -> CommandResult {
 
             let _ = msg.reply(ctx, format!("Correct! +1 points ({} -> {})", state.score - 1, state.score)).await;
 
-            break;
+            return Ok(());
         } else if normalized_levenshtein(&msg.content.to_lowercase(), &clue.answer.to_lowercase())
             > 0.8
         {
