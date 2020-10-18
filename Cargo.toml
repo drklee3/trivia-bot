@@ -10,7 +10,6 @@ dashmap = "4.0.0-rc6"
 dotenv = "0.15"
 lazy_static = "1.4"
 reqwest = "0.10.8"
-sled = "0.34"
 strsim = "0.10"
 tracing = "0.1"
 tracing-subscriber = "0.2"
@@ -26,3 +25,8 @@ features = ["macros", "rt-core", "time"]
 [dependencies.serenity]
 version = "0.9.0-rc.1"
 features = ["default", "collector"]
+
+[dependencies.sqlx]
+version = "0.4.0-beta.1"
+default-features = false
+features = [ "runtime-tokio", "macros", "sqlite", "chrono", "offline", "migrate" ]

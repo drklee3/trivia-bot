@@ -8,10 +8,10 @@ impl TypeMapKey for ShardManagerContainer {
     type Value = Arc<Mutex<ShardManager>>;
 }
 
-pub struct SledContainer;
+pub struct DbPool;
 
-impl TypeMapKey for SledContainer {
-    type Value = sled::Db;
+impl TypeMapKey for DbPool {
+    type Value = sqlx::SqlitePool;
 }
 
 pub struct ReqwestContainer;

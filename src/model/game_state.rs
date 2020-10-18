@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 #[derive(Clone, Default)]
 pub struct GameState {
-    pub individual: Arc<DashMap<u64, bool>>,
     pub channel: Arc<DashMap<u64, bool>>,
 }
 

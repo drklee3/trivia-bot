@@ -1,5 +1,4 @@
-use crate::keys::*;
-use jservice_rs::JServiceRequester;
+use jservice_rs::{JServiceRequester, model::Clue};
 use serenity::collector::message_collector::MessageCollectorBuilder;
 use serenity::framework::standard::{macros::command, CommandResult};
 use serenity::model::prelude::*;
@@ -8,14 +7,16 @@ use std::time::Duration;
 use strsim::normalized_levenshtein;
 use tokio::stream::StreamExt;
 
+use crate::keys::*;
+use crate::model::{UserState, UserStateDb};
+
 #[command]
 pub async fn quiz(ctx: &Context, msg: &Message) -> CommandResult {
     let data = ctx.data.read().await;
     let client = data.get::<ReqwestContainer>().unwrap();
-    // let db = data.get::<SledContainer>().unwrap();
     let game_state = data.get::<GameState>().unwrap();
 
-    if let Some(is_playing) = game_state.individual.get(&msg.author.id.0) {
+    if let Some(is_playing) = game_state.channel.get(&msg.channel_id.0) {
         if *is_playing {
             let _ = msg
                 .channel_id
@@ -49,8 +50,18 @@ pub async fn quiz(ctx: &Context, msg: &Message) -> CommandResult {
     msg.channel_id.say(&ctx.http, &clue.question).await?;
 
     // Save state
-    game_state.individual.insert(msg.author.id.0, true);
+    game_state.channel.insert(msg.channel_id.0, true);
 
+    if let Err(e) = _quiz(&ctx, &msg, &clue).await {
+        tracing::error!(?msg, "Quiz error: {}", e);
+    }
+
+    game_state.channel.insert(msg.channel_id.0, false);
+
+    Ok(())
+}
+
+pub async fn _quiz(ctx: &Context, msg: &Message, clue: &Clue) -> CommandResult {
     let mut collector = MessageCollectorBuilder::new(&ctx)
         .channel_id(msg.channel_id)
         .timeout(Duration::from_secs(15))
@@ -58,14 +69,19 @@ pub async fn quiz(ctx: &Context, msg: &Message) -> CommandResult {
 
     while let Some(msg) = collector.next().await {
         if msg.content.to_lowercase() == clue.answer.to_lowercase() {
-            let _ = msg.reply(ctx, "Correct! +1 points").await;
+            let state = UserState::inc(&ctx, msg.author.id.0).await?;
+
+            let _ = msg.reply(ctx, format!("Correct! +1 points ({} -> {})", state.score - 1, state.score)).await;
+
             break;
         } else if normalized_levenshtein(&msg.content.to_lowercase(), &clue.answer.to_lowercase())
             > 0.8
         {
+            // if the answer is pretty close, react
             let _ = msg.react(ctx, '🤏').await;
         } else {
             // let _ = msg.react(ctx, '❌').await;
+            // Don't do anything when user responds wrong
         }
     }
 
@@ -76,7 +92,7 @@ pub async fn quiz(ctx: &Context, msg: &Message) -> CommandResult {
         )
         .await;
 
-    game_state.individual.insert(msg.author.id.0, false);
-
     Ok(())
 }
+
+

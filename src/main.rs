@@ -1,11 +1,13 @@
 use serenity::{framework::StandardFramework, http::Http, prelude::*};
 use std::{collections::HashSet, env};
+use sqlx::SqlitePool;
 use tokio::signal::unix::{signal, SignalKind};
 
 mod commands;
 mod handler;
 mod keys;
 mod model;
+mod error;
 
 use commands::*;
 
@@ -14,10 +16,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt().init();
 
-    let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
+    let sqlite_url = env::var("DATABASE_URL").expect("Expected DATABASE_URL in the environment");
 
-    let sled_path = env::var("SLED_PATH").expect("Expected SLED_PATH in environment");
-    let sled = sled::open(sled_path)?;
+    let pool = SqlitePool::connect(&sqlite_url)
+        .await?;
+
+    let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
 
     let http = Http::new_with_token(&token);
 
@@ -46,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let mut data = client.data.write().await;
         data.insert::<keys::ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<keys::SledContainer>(sled.clone());
+        data.insert::<keys::DbPool>(pool.clone());
         data.insert::<keys::ReqwestContainer>(reqwest::Client::new());
         data.insert::<model::GameState>(model::GameState::new());
     }
