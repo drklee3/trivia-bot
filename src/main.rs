@@ -21,6 +21,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool = SqlitePool::connect(&sqlite_url)
         .await?;
 
+    sqlx::migrate!("./migrations").run(&pool).await?;
+
     let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in the environment");
 
     let http = Http::new_with_token(&token);
