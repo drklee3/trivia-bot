@@ -40,7 +40,7 @@ async fn from_id_query(pool: &sqlx::SqlitePool, user_id: i64) -> Result<Option<U
         r#"
             SELECT *
               FROM user_states
-             WHERE user_id = $1
+             WHERE user_id = ?1
         "#,
         user_id
     )
@@ -54,7 +54,7 @@ async fn inc_query(pool: &sqlx::SqlitePool, user_id: i64) -> Result<UserState> {
         UserState,
         r#"
             INSERT INTO user_states (user_id, score)
-                 VALUES ($1, 1)
+                 VALUES (?1, 1)
             ON CONFLICT (user_id)
               DO UPDATE SET score = score + 1
         "#,
@@ -68,7 +68,7 @@ async fn inc_query(pool: &sqlx::SqlitePool, user_id: i64) -> Result<UserState> {
         r#"
             SELECT *
               FROM user_states
-             WHERE user_id = $1
+             WHERE user_id = ?1
         "#,
         user_id
     )
