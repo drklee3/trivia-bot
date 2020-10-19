@@ -1,9 +1,10 @@
 use serenity::framework::standard::macros::group;
 
+mod points;
 mod quiz;
 
-use quiz::*;
+use self::{points::*, quiz::*};
 
 #[group]
-#[commands(quiz)]
+#[commands(quiz, points)]
 struct Quiz;
