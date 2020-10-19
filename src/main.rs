@@ -1,13 +1,14 @@
 use serenity::{framework::StandardFramework, http::Http, prelude::*};
-use std::{collections::HashSet, env};
 use sqlx::SqlitePool;
+use std::{collections::HashSet, env};
 use tokio::signal::unix::{signal, SignalKind};
 
 mod commands;
+mod error;
 mod handler;
 mod keys;
 mod model;
-mod error;
+mod util;
 
 use commands::*;
 
@@ -18,8 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let sqlite_url = env::var("DATABASE_URL").expect("Expected DATABASE_URL in the environment");
 
-    let pool = SqlitePool::connect(&sqlite_url)
-        .await?;
+    let pool = SqlitePool::connect(&sqlite_url).await?;
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 

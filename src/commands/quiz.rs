@@ -1,20 +1,21 @@
-use jservice_rs::{JServiceRequester, model::Clue};
+use jservice_rs::{model::Clue, JServiceRequester};
 use serenity::collector::message_collector::MessageCollectorBuilder;
-use serenity::framework::standard::{macros::command, CommandResult};
+use serenity::framework::standard::{macros::command, CommandResult, Args};
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 use std::time::Duration;
-use strsim::normalized_levenshtein;
 use tokio::stream::StreamExt;
 
 use crate::keys::*;
 use crate::model::{UserState, UserStateDb};
 
 #[command]
-pub async fn quiz(ctx: &Context, msg: &Message) -> CommandResult {
+pub async fn quiz(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let data = ctx.data.read().await;
     let client = data.get::<ReqwestContainer>().unwrap();
     let game_state = data.get::<GameState>().unwrap();
+
+    let num_questions = args.single::<u64>().unwrap_or(3);
 
     if let Some(is_playing) = game_state.channel.get(&msg.channel_id.0) {
         if *is_playing {
@@ -26,7 +27,7 @@ pub async fn quiz(ctx: &Context, msg: &Message) -> CommandResult {
         }
     }
 
-    let clues = match client.get_random_clues(1).await {
+    let clues = match client.get_random_clues(num_questions).await {
         Ok(c) => c,
         Err(e) => {
             tracing::error!("Failed to get clue: {}", e);
@@ -36,24 +37,22 @@ pub async fn quiz(ctx: &Context, msg: &Message) -> CommandResult {
         }
     };
 
-    let clue = match clues.first() {
-        Some(c) => c,
-        None => {
-            tracing::error!(?msg, "Fetched clues are empty",);
-            let _ = msg.channel_id.say(&ctx, "Failed to fetch clue :(").await?;
+    tracing::info!(?clues, "Requested clues");
 
-            return Ok(());
-        }
+    if clues.is_empty() {
+        tracing::error!(?msg, "Fetched clues are empty",);
+        let _ = msg.channel_id.say(&ctx, "Failed to fetch clues :(").await?;
+
+        return Ok(());
     };
-
-    tracing::info!(?clue, "Requested clue");
-    msg.channel_id.say(&ctx.http, &clue.question).await?;
 
     // Save state
     game_state.channel.insert(msg.channel_id.0, true);
 
-    if let Err(e) = _quiz(&ctx, &msg, &clue).await {
-        tracing::error!(?msg, "Quiz error: {}", e);
+    for (i, clue) in clues.iter().enumerate() {
+        if let Err(e) = _quiz(&ctx, &msg, &clue, (i, clues.len())).await {
+            tracing::error!(?msg, "Quiz error: {}", e);
+        }
     }
 
     game_state.channel.insert(msg.channel_id.0, false);
@@ -61,22 +60,70 @@ pub async fn quiz(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-pub async fn _quiz(ctx: &Context, msg: &Message, clue: &Clue) -> CommandResult {
+pub async fn _quiz(ctx: &Context, msg: &Message, clue: &Clue, count: (usize, usize)) -> CommandResult {
+    let _ = msg
+        .channel_id
+        .send_message(&ctx.http, |m| {
+            m.embed(|e| {
+                e.author(|a| a.name(format!("Question #{}/{}", count.0 + 1, count.1)));
+
+                e.title(format!(
+                    "Category: {}",
+                    clue.category
+                        .as_ref()
+                        .map_or_else(|| "No Category", |c| &c.title)
+                ));
+
+                e.description(&clue.question);
+
+                e.field("Value", format!("{}", clue.value.unwrap_or(100)), false);
+
+                if let Some(d) = clue.created_at {
+                    e.timestamp(d.to_rfc3339());
+                }
+
+                e.footer(|f| {
+                    f.text(format!(
+                        "Category ID: {}, Game ID: {}",
+                        clue.category_id,
+                        clue.game_id
+                            .map_or_else(|| "N/A".into(), |id| id.to_string())
+                    ))
+                });
+                e.color(0x9b59b6);
+
+                e
+            })
+        })
+        .await?;
+
     let mut collector = MessageCollectorBuilder::new(&ctx)
         .channel_id(msg.channel_id)
-        .timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(25))
         .await;
 
     while let Some(msg) = collector.next().await {
-        if msg.content.to_lowercase() == clue.answer.to_lowercase() {
-            let state = UserState::inc(&ctx, msg.author.id.0).await?;
+        let (is_match, dist) = crate::util::check_answer(&msg.content, &clue.answer);
 
-            let _ = msg.reply(ctx, format!("Correct! +1 points ({} -> {})", state.score - 1, state.score)).await;
+        if is_match {
+            let clue_points = clue.value.unwrap_or(100);
+
+            let state = UserState::inc(&ctx, msg.author.id.0, clue_points).await?;
+
+            let _ = msg
+                .reply(
+                    ctx,
+                    format!(
+                        "Correct! **+{} points** ({} → {})",
+                        clue_points,
+                        state.points as u64 - clue_points,
+                        state.points
+                    ),
+                )
+                .await;
 
             return Ok(());
-        } else if normalized_levenshtein(&msg.content.to_lowercase(), &clue.answer.to_lowercase())
-            > 0.8
-        {
+        } else if dist > 0.8 {
             // if the answer is pretty close, react
             let _ = msg.react(ctx, '🤏').await;
         } else {
@@ -94,5 +141,3 @@ pub async fn _quiz(ctx: &Context, msg: &Message, clue: &Clue) -> CommandResult {
 
     Ok(())
 }
-
-
