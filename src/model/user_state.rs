@@ -8,6 +8,7 @@ use crate::keys::*;
 pub struct UserState {
     pub user_id: i64,
     pub points: i64,
+    pub questions: i64,
 }
 
 #[async_trait]
@@ -53,10 +54,12 @@ async fn inc_query(pool: &sqlx::SqlitePool, user_id: i64, points: i64) -> Result
     sqlx::query_as!(
         UserState,
         r#"
-            INSERT INTO user_states (user_id, points)
-                 VALUES (?1, ?2)
+            INSERT INTO user_states (user_id, points, questions)
+                 VALUES (?1, ?2, 1)
             ON CONFLICT (user_id)
-              DO UPDATE SET points = points + ?2
+              DO UPDATE
+                        SET points = points + ?2,
+                            questions = questions + 1
         "#,
         user_id,
         points
