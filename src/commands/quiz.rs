@@ -21,7 +21,7 @@ pub async fn quiz(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         if *is_playing {
             let _ = msg
                 .channel_id
-                .say(&ctx, "You have a quiz ongoing right now.")
+                .say(&ctx, "There is a quiz ongoing in this channel right now.")
                 .await?;
             return Ok(());
         }
