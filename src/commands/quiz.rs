@@ -48,14 +48,19 @@ pub async fn quiz(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
                 true
             }
         })
+        .take(num_questions as usize)
         .collect();
 
     if clues_filtered.is_empty() {
-        tracing::error!(?msg, "Fetched clues are empty",);
+        tracing::error!(?msg, "Fetched clues are empty");
         let _ = msg.channel_id.say(&ctx, "Failed to fetch clues :(").await?;
 
         return Ok(());
     };
+
+    if clues_filtered.len() < num_questions as usize {
+        tracing::warn!(?msg, "Number of filtered clues are less than requested");
+    }
 
     // Save state
     game_state.channel.insert(msg.channel_id.0, true);
