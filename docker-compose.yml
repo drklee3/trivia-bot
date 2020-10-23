@@ -1,0 +1,53 @@
+version: "3.8"
+services:
+    postgres:
+        image: postgres:13
+        container_name: trivia_postgres
+        restart: unless-stopped
+        env_file:
+            - .env
+        volumes:
+            - ~/trivia/postgres:/var/lib/postgresql/data
+        networks:
+            - trivia_net
+    postgres_backups:
+        image: prodrigestivill/postgres-backup-local
+        restart: unless-stopped
+        volumes:
+            - ~/pgbackups/trivia:/backups
+        depends_on:
+            - postgres
+        env_file:
+            - .env
+        environment:
+            - POSTGRES_HOST=postgres
+            - POSTGRES_EXTRA_OPTS=-Z9 --schema=public --blobs
+            - SCHEDULE=@daily
+            - BACKUP_KEEP_DAYS=7
+            - BACKUP_KEEP_WEEKS=4
+            - BACKUP_KEEP_MONTHS=6
+            - HEALTHCHECK_PORT=8080
+        networks:
+            - trivia_net
+    trivia:
+        image: docker.pkg.github.com/drklee3/trivia-bot/trivia-bot:latest
+        container_name: trivia
+        restart: unless-stopped
+        depends_on:
+            - postgres
+        logging:
+            driver: json-file
+            options:
+                max-size: "10m"
+                max-file: "3"
+                mode: non-blocking
+                max-buffer-size: 4m
+        env_file:
+            - .env
+        networks:
+            - trivia_net
+        labels:
+            - "traefik.enable=false"
+networks:
+    trivia_net:
+        name: trivia_net
