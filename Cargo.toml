@@ -29,4 +29,4 @@ features = ["default", "collector"]
 [dependencies.sqlx]
 version = "0.4.0-beta.1"
 default-features = false
-features = [ "runtime-tokio", "macros", "sqlite", "chrono", "offline", "migrate" ]
+features = [ "runtime-tokio", "macros", "postgres", "chrono", "offline", "migrate" ]

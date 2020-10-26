@@ -11,7 +11,7 @@ impl TypeMapKey for ShardManagerContainer {
 pub struct DbPool;
 
 impl TypeMapKey for DbPool {
-    type Value = sqlx::SqlitePool;
+    type Value = sqlx::PgPool;
 }
 
 pub struct ReqwestContainer;

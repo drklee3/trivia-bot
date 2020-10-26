@@ -35,13 +35,13 @@ impl UserStateDb for UserState {
     }
 }
 
-async fn from_id_query(pool: &sqlx::SqlitePool, user_id: i64) -> Result<Option<UserState>> {
+async fn from_id_query(pool: &sqlx::PgPool, user_id: i64) -> Result<Option<UserState>> {
     sqlx::query_as!(
         UserState,
         r#"
             SELECT *
               FROM user_states
-             WHERE user_id = ?1
+             WHERE user_id = $1
         "#,
         user_id
     )
@@ -50,31 +50,20 @@ async fn from_id_query(pool: &sqlx::SqlitePool, user_id: i64) -> Result<Option<U
     .map_err(Into::into)
 }
 
-async fn inc_query(pool: &sqlx::SqlitePool, user_id: i64, points: i64) -> Result<UserState> {
+async fn inc_query(pool: &sqlx::PgPool, user_id: i64, points: i64) -> Result<UserState> {
     sqlx::query_as!(
         UserState,
         r#"
             INSERT INTO user_states (user_id, points, questions)
-                 VALUES (?1, ?2, 1)
+                 VALUES ($1, $2, 1)
             ON CONFLICT (user_id)
               DO UPDATE
-                        SET points = points + ?2,
-                            questions = questions + 1
+                    SET points = user_states.points + $2,
+                        questions = user_states.questions + 1
+              RETURNING *
         "#,
         user_id,
         points
-    )
-    .execute(pool)
-    .await?;
-
-    sqlx::query_as!(
-        UserState,
-        r#"
-            SELECT *
-              FROM user_states
-             WHERE user_id = ?1
-        "#,
-        user_id
     )
     .fetch_one(pool)
     .await

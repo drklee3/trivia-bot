@@ -1,5 +1,5 @@
 use serenity::{framework::StandardFramework, http::Http, prelude::*};
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use std::{collections::HashSet, env};
 use tokio::signal::unix::{signal, SignalKind};
 
@@ -17,9 +17,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt().init();
 
-    let sqlite_url = env::var("DATABASE_URL").expect("Expected DATABASE_URL in the environment");
+    let db_url = env::var("DATABASE_URL").expect("Expected DATABASE_URL in the environment");
 
-    let pool = SqlitePool::connect(&sqlite_url).await?;
+    let pool = PgPool::connect(&db_url).await?;
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 
