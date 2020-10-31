@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .configure(|c| c.owners(owners).prefix("$"))
         .group(&QUIZ_GROUP);
 
-    let mut client = Client::new(&token)
+    let mut client = Client::builder(&token)
         .framework(framework)
         .event_handler(handler::Handler)
         .await

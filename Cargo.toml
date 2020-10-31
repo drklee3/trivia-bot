@@ -20,10 +20,10 @@ branch = "main"
 
 [dependencies.tokio]
 version = "0.2"
-features = ["macros", "rt-core", "time"]
+features = ["macros", "rt-core", "time", "signal"]
 
 [dependencies.serenity]
-version = "0.9.0-rc.1"
+version = "0.9.0"
 features = ["default", "collector"]
 
 [dependencies.sqlx]
